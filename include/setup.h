@@ -1,17 +1,8 @@
 #include <stdint.h>
 #include <run.h>
 
-//#ifndef THREADS
-//#define THREADS (40)
-//#endif
-
-//#define OBJECTS (128)
 
 #define MEM_NODES (2)
-
-//#ifndef LOOKAHEAD
-//#define LOOKAHEAD (0.1)
-//#endif
 
 #define INIT 0
 #define STARTUP_TIME (0.0)
