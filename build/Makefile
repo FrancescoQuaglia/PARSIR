@@ -9,7 +9,8 @@ runtime:
 	gcc -c -O3 ../stubs/stubs.c -o ../lib/stubs.o -I../include 
 	gcc -c -O3 ../random/random.c -o ../lib/random.o -I../include 
 	gcc -c -O3 ../engine/engine.c -o ../lib/engine.o -I../include 
-	ld  -r ../lib/queue.o ../lib/memory.o ../lib/barrier-synchronization.o ../lib/stubs.o ../lib/random.o ../lib/engine.o -I../include -o ../lib/PARSIR-runtime.o
+	gcc -c -O3 ../syscalls/syscalls.c -o ../lib/syscalls.o -I../include 
+	ld  -r ../lib/queue.o ../lib/memory.o ../lib/barrier-synchronization.o ../lib/stubs.o ../lib/random.o ../lib/engine.o ../lib/syscalls.o -I../include -o ../lib/PARSIR-runtime.o
 
 phold: runtime
 	cd ../models/phold ; make
