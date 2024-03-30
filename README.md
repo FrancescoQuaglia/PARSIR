@@ -37,6 +37,8 @@ NUMA nodes to be managed, as well as the the maximum number of CPUs per NUMA nod
 Parallel execution of the simulation objects is carried out by PARSIR in a fully 
 transparent manner to the application level code
 
+REQUIREMENTS: PARSIR requires the numa library and its header to be installed on the system (it compiles with the -lnuma option)
+
 
 
 

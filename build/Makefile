@@ -1,5 +1,5 @@
 all: runtime
-	echo "Runtime environemt of PARSIR has been compiled - object files are available in their corresponding directories"
+	@ echo "The runtime environment of PARSIR has been compiled - object files are available in the lib directory"
 
 runtime:
 	cd ../scripts ; make get-HW-info

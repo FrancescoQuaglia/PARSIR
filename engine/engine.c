@@ -170,10 +170,6 @@ void * thread(void* me){
 }
 
 #define LINE 1024
-//the below max values can be modified with no problem 
-//for handling very huge hardware patforms
-//#define MAX_NUMA_NODES 128
-//#define MAX_CPUS_PER_NODE 1024
 int hw = 0;
 int CPUs = 0;
 int NUMA_NODES = 0;
