@@ -298,6 +298,10 @@ redo:
 		if( barrier()){
 			update_timing();//this call updates the queue layout and releases the objects taken by threads in the last epoch
 		}
+
+#ifdef NUMA_UBIQUITOUS
+		if (to_restore != -1) mm_restore();
+#endif
 		barrier();
 		my_index = current_index;
 		target = -1;
