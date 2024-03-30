@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <setup.h>
+#include "memory.h"
 
 slot queue[OBJECTS][NUM_SLOTS];
 lock_buffer locks[OBJECTS][NUM_SLOTS];
@@ -36,6 +37,28 @@ __thread int myNUMAnode;
 __thread int myNUMAindex; 
 __thread int stealNUMAindex; 
 __thread int TOT_NUMA_NODES; 
+
+#ifdef NUMA_UBIQUITOUS
+__thread int to_restore = -1;
+__thread int index_A = -1;
+__thread int index_B = -1;
+
+extern numa_map maps[OBJECTS];
+
+void mm_set(int object){
+	to_restore = object;
+	index_A = maps[object].node_indexing[myNUMAnode];
+	index_B = maps[object].node_indexing[maps[object].primary_node];
+	switch_kernel_array_entries(maps[object].base_address,index_A, index_B);
+}
+
+void mm_restore(void){
+	switch_kernel_array_entries(maps[to_restore].base_address,index_B, index_A);
+	to_restore = -1;
+}
+
+
+#endif
 
 
 void whoami(unsigned my_id){
@@ -298,6 +321,25 @@ redo:
 	}
 
 	//regular extraction from a non-empty slot
+
+
+#ifdef NUMA_UBIQUITOUS
+	if (target == to_restore){
+		AUDIT printf("found the same object %d to process\n",target);
+		goto process;
+	}
+	if (to_restore != -1){
+		AUDIT printf("restoring mm for object %d\n",to_restore);
+		mm_restore();
+		 
+	}
+	if (maps[target].primary_node != myNUMAnode){
+		AUDIT printf("setting mm for object %d\n",target);
+		mm_set(target);	
+	}
+	AUDIT printf("simply processing local object %d\n",target);
+process:
+#endif
 
 	elem = head->next;
 
