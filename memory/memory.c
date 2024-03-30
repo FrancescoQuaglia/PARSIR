@@ -4,6 +4,7 @@
 #include <numaif.h>
 #include "setup.h"
 #include "queue.h"
+#include "memory.h"
 
 #define MIN_CHUNK_SIZE (32)
 #define MAX_CHUNK_SIZE (MIN_CHUNK_SIZE << 7)//4KB is the currently set max chunk size
@@ -25,6 +26,20 @@ typedef struct _area{
 area * allocators[OBJECTS];
 void * base[OBJECTS];
 
+#define NUMA_UBIQUITOUS //for now we are still subject to this define
+
+#ifdef NUMA_UBIQUITOUS
+typedef struct _numa_map {
+	int primary_node;//this is the NUMA node ID where the object is initially placed
+	unsigned long base_address;//this is the logical address of the
+				   //memory segment for the object allocator
+	int node_indexing[MEM_NODES];//this array tells the index of the PTE array
+				     //entry for a memory region related to a NUMA node
+} numa_map;
+
+numa_map maps[OBJECTS];
+#endif
+
 void allocators_base_init(void){
 	int i;
 
@@ -42,7 +57,7 @@ void allocators_base_init(void){
 
 }
 
-void object_allocator_setup(void){
+void object_allocator_setup(void){//size_t size){
 
 	int i;
 	int j;
@@ -56,6 +71,7 @@ void object_allocator_setup(void){
 	int chunk_size;
 	void* limit;
 	void* aux;
+	unsigned long kernel_array_address;
 
 	base_address = 8 * (1024 * MAX_MEMORY);//this can be setup in a different manner if needed
 	current = get_current();
@@ -66,7 +82,14 @@ void object_allocator_setup(void){
 
 	mask = 0x1 << NUMAnode;//this is for NUMA binding of memory zones
 	AUDIT printf("thread running on NUMA node %d - mask for setting up object %d is %lu\n",NUMAnode,current,mask);
+
+#ifdef NUMA_UBIQUITOUS
+	maps[current].primary_node = NUMAnode; 
+	maps[current].base_address = target_address; 
+	for (i = 0; i < MEM_NODES; i++){
+#else
 	for (i = 0; i < 1; i++){//the above line is left just to let the developer restart from here for NUMA ubiquitousness
+#endif
 		addr = mmap((void*)target_address, MAX_MEMORY, PROT_READ|PROT_WRITE, MAP_ANONYMOUS| MAP_PRIVATE | MAP_FIXED,0,0);
 		if(addr != (void*)target_address){
 			printf("mmap failure for object %d\n",current);
@@ -79,13 +102,24 @@ void object_allocator_setup(void){
 		}; 
 		*(char*)addr = 'f';//materialize the 3-rd level page table entry
 		AUDIT printf("mapped zone at address %p for object %d\n",(void*)target_address,current);
+#ifdef NUMA_UBIQUITOUS
+		maps[current].node_indexing[NUMAnode] = i; 
 		target_address += MAX_MEMORY;
-		mask = mask < 1;
+		NUMAnode = NUMAnode + 1;
+		NUMAnode = NUMAnode % MEM_NODES;
+		mask = 0x1 << NUMAnode;
+		AUDIT printf("new NUMA node for object %d is %p\n",current,(void*)mask);
+#endif
 	}
 
+#ifdef NUMA_UBIQUITOUS
+	AUDIT for (i = 0 ; i < MEM_NODES; i++){
+		printf("indexing for object %d - index value %d - NUMA node is %d\n",current,i,maps[current].node_indexing[i]);
+	}
+#endif
 
-	target_address = base_address + current * (MAX_MEMORY * MEM_NODES);
-	base[current] = (void*)target_address;
+        target_address = base_address + current * (MAX_MEMORY * MEM_NODES);
+        base[current] = (void*)target_address;
 
 	//the allocator is based on a stack of free-chunk addresses 
 	//now we initialize the free stacks of the per-object allocator
