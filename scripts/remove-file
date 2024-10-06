@@ -1,0 +1,1 @@
+if [ "$(numactl --hardware | grep available | awk '{print $2}')" = "1" ]; then rm ../setup-data/hw.txt; echo "single NUMA node configuration - the HW config file is being removed\nPARSIR will run with the basic (default) configuration"; fi
