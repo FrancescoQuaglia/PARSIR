@@ -28,7 +28,7 @@ __thread unsigned me;
 __thread unsigned target = -1;
 
 //we use '_' here just to discriminate from the 
-//corresponding  non TLS global variables
+//corresponding non TLS global variables
 __thread int * _c;
 __thread int * _min;
 __thread int * _max;
@@ -45,19 +45,38 @@ __thread int index_B = -1;
 
 extern numa_map maps[OBJECTS];
 
+__thread int num_mm_switches = 0;//just for audit
+__thread int num_events[2];//these are two entries for normal answtched event counts
+__thread int count_index = 0;
+
 void mm_set(int object){
 	to_restore = object;
-	index_A = maps[object].node_indexing[myNUMAnode];
-	index_B = maps[object].node_indexing[maps[object].primary_node];
+	//index_A = maps[object].node_indexing[myNUMAnode];
+	//index_B = maps[object].node_indexing[maps[object].primary_node];
+	index_B = maps[object].node_indexing[myNUMAnode];
+	index_A = maps[object].node_indexing[maps[object].primary_node];
 	switch_kernel_array_entries(maps[object].base_address,index_A, index_B);
+	num_mm_switches++;
+//	if ((num_mm_switches % 1000) == 0) printf("did %d switches - processes %d and %d events\n",num_mm_switches,num_events[0],num_events[1]);
+
+	count_index = 1;
 }
 
 void mm_restore(void){
 	switch_kernel_array_entries(maps[to_restore].base_address,index_B, index_A);
+//	switch_kernel_array_entries(maps[to_restore].base_address,index_A, index_B);
+	index_A = -1;
+	index_B = -1;
 	to_restore = -1;
+
+	count_index = 0;
 }
 
 
+#endif
+
+#ifdef TLB_TEST
+__thread long taken_objects = -1;
 #endif
 
 
@@ -327,8 +346,12 @@ redo:
 	//regular extraction from a non-empty slot
 
 
+
 #ifdef NUMA_UBIQUITOUS
-	if (target == to_restore){
+	num_events[count_index]++;
+
+
+	if ((target == to_restore)){
 		AUDIT printf("found the same object %d to process\n",target);
 		goto process;
 	}
@@ -337,6 +360,14 @@ redo:
 		mm_restore();
 		 
 	}
+
+#ifdef TLB_TEST
+	if ((++taken_objects)%THRESHOLD == 0){
+		AUDIT printf("setting mm for object %d - just TLB test\n",target);
+		mm_set(target);	
+	}
+	goto process;
+#endif
 	if (maps[target].primary_node != myNUMAnode){
 		AUDIT printf("setting mm for object %d\n",target);
 		mm_set(target);	
@@ -354,6 +385,7 @@ process:
 
 	pthread_spin_unlock(&locks[target][index].lock);
 
+	AUDIT printf("just returning from queue_extract\n");
 	return elem;
 	
 }

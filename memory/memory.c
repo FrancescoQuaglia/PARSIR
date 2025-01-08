@@ -2,9 +2,14 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <numaif.h>
+#include <string.h>
 #include "setup.h"
 #include "queue.h"
 #include "memory.h"
+
+#define MATERIALIZATION
+
+#define PAGE_SIZE (4096)
 
 #define MIN_CHUNK_SIZE (32)
 #define MAX_CHUNK_SIZE (MIN_CHUNK_SIZE << 7)//4KB is the currently set max chunk size
@@ -31,6 +36,16 @@ void * base[OBJECTS];
 
 numa_map maps[OBJECTS];
 #endif
+
+
+#ifdef NUMA_BALANCING
+#ifdef NUMA_UBIQUITOUS
+void sanitize(int current){
+	memcpy((char*)maps[current].base_address+(1<<21),(char*)maps[current].base_address,MAX_MEMORY);
+}
+#endif
+#endif
+
 
 void allocators_base_init(void){
 	int i;
@@ -94,6 +109,12 @@ void object_allocator_setup(void){//size_t size){
 		}; 
 		*(char*)addr = 'f';//materialize the 3-rd level page table entry
 		AUDIT printf("mapped zone at address %p for object %d\n",(void*)target_address,current);
+#ifdef MATERIALIZATION
+		//this is required just if the used kernel module does not switch mem-policy bitmasks
+		for(j=0;j<512;j++){//pre-materialize all the pages for the PDE entry 
+			((char*)addr)[j*PAGE_SIZE] = 'f';
+		}
+#endif
 #ifdef NUMA_UBIQUITOUS
 		maps[current].node_indexing[NUMAnode] = i; 
 		target_address += MAX_MEMORY;
@@ -144,15 +165,27 @@ void* __wrap_malloc(size_t size){
 	int current;
 	int index;
 	void * chunk_address;
+	int min_chunk_size = MIN_CHUNK_SIZE;
+	int max_chunk_size = MAX_CHUNK_SIZE;
+	int i;
 
 	current = get_current();
 	if (size == 0) return NULL;
-	index = (int)( ((double)size / (double)MIN_CHUNK_SIZE) - EPSILON);
+	for(i = 0; min_chunk_size <= max_chunk_size; i++){
+		if (size <= min_chunk_size) {
+			index = i;
+			break;
+		}
+		min_chunk_size = min_chunk_size << 1;
+		index = i;
+	} 
+	//index = (int)( ((double)size / (double)MIN_CHUNK_SIZE) - EPSILON);
 	AUDIT printf("wrapping malloc for object %d - size is %ld - index is %d\n",current,size,index);
 redo:
 	if(index >= (int)((double)(MAX_MEMORY>>12)/(double)(SEGMENT_PAGES))){
 		printf("unavailable memory for object %d\n",current);
 		exit(EXIT_FAILURE);
+		return NULL;
 	}
 	if ((allocators[current])[index].top_elem == (allocators[current])[index].size){
 		index++;

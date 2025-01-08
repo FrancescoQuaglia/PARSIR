@@ -71,15 +71,28 @@ int GetEvent(int *destination, double *timestamp, int *event_type, char* body, i
 		printf("empty event queue\n");
 		return -1;
 	}
+	//printf("action 1\n");
+	//fflush(stdout);
+
 	e = (event_buffer*)container_of(q, event, q);
+
+	//printf("action 2\n");
+	//fflush(stdout);
 
 	*destination = e->destination;
 	*timestamp = e->timestamp;
 	*event_type = e->event_type;;
 	*size = e->event_size;
+
+	//printf("action 3 - body is %p - payload is %p - size is %d\n",body, e->payload, e->event_size);
+	//fflush(stdout);
+
 	memcpy(body, e->payload, e->event_size);
 
 	free(e);
+
+	AUDIT printf("just returning from GetEvent\n");
+	AUDIT fflush(stdout);
 
 	return 0;
 }

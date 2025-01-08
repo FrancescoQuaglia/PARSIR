@@ -11,9 +11,13 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include "setup.h"
 
 #define MAX_EVENT_SIZE  (512)
 
+#define BENCHMARKING
+
+//#define  FULL_REPLICATION
 
 typedef struct _event_buffer{
 	int destination;
@@ -51,7 +55,7 @@ __thread thread_startup * thread_startup_data;
 thread_startup startup_info[THREADS];
 volatile int processed_events[THREADS];
 #define PERIOD (5)//this is setup in seconds
-#define DURATION (60)//this is setup in seconds
+#define DURATION (120)//this is setup in seconds
 
 
 __thread int current = -1;
@@ -64,8 +68,7 @@ inline int get_current(void){
 }
 
 inline int get_NUMAnode(void){
-	return numaNodePerObjects;//NUMAnode;
-	//return NUMAnode;
+	return numaNodePerObjects;
 }
 
 
@@ -78,6 +81,7 @@ inline int * getmin(void){
 inline int * getmax(void){ 
 	return  thread_startup_data->max;
 }
+
 
 //This is the PARSIR worker thread
 void * thread(void* me){
@@ -97,6 +101,8 @@ void * thread(void* me){
 	int numaNodeID = ((thread_startup*)me)->numaNodeID; 
 	event_buffer * the_event;
 	//this is only used for awoiding compile-time warning
+
+	
 
 	thread_startup_data = (thread_startup*)me;
 
@@ -122,12 +128,24 @@ void * thread(void* me){
 
 	AUDIT printf("PARSIR worker thread %ld received min %d and max %d\n",aux,minID,maxID);
 	for (; minID <= maxID; minID++){
-		AUDIT printf("thread %ld - starting up object %d\n",aux, minID);
+		AUDIT printf("thread %ld - starting up object %d on NUMA node %d\n",aux, minID,numaNodePerObjects);
 		fflush(stdout);
 		current = minID;
 		object_allocator_setup();//you cannot init any object if its chunk allocator is not setup
 		AUDIT printf("thread %ld - setting up object %d\n",aux,current);
 		ProcessEvent(minID, STARTUP_TIME, INIT, NULL, 0, NULL);
+#ifdef NUMA_BALANCING
+#ifdef FULL_REPLICATION
+		sanitize(current);//memory sanitize with full replication - 
+				//do not use this facility when testing the 
+				//actual memory usage due to replication of just used
+				//memory chunks
+				//this facility is useful when running with 
+				//the switch_kernel_array_entries(...) system call 
+				//that does not switch bitmasks for mem-policies of
+				//mmapped memory areas
+#endif
+#endif
 		current = -1;
 	}	
 	//the init phase is over
@@ -141,13 +159,13 @@ void * thread(void* me){
 	//the extracted events
 	the_event = malloc(sizeof(event));
 	if (!the_event){
-		printf("test queue error 1 - event allocation failure\n");
+		printf("event allocation failure\n");
 		fflush(stdout);
 		exit(EXIT_FAILURE);
 	}
 
 	do {
-		ret = GetEvent(&(the_event -> destination), &(the_event->timestamp), &(the_event -> event_type),NULL, &(the_event->event_size) ); 
+		ret = GetEvent(&(the_event -> destination), &(the_event->timestamp), &(the_event -> event_type), (char*)&(the_event->payload), &(the_event->event_size) ); 
 		if(!ret){
 			AUDIT printf("thread %ld got event: %e -  %d - %d\n",
 			aux,
@@ -376,7 +394,33 @@ NUMAdone:	;
 		printf("objects assigned to NUMA node %ld are %d min is %d - max is %d\n",i,c[i],min[i],max[i]);
 	}
 
+#ifdef BENCHMARKING
+        j = 0;
+        stable = 0;
+        while(1){
+                sleep(PERIOD);
+                total = 0;
+                for (i = 0; i < THREADS; i++){
+                        total += processed_events[i];
+                        processed_events[i] = 0;        
+                }
+
+                if(stable && (total != 0)){
+                        printf("last event throughput is %f\n",(float)total/(float)PERIOD);
+                        //res = getrusage(RUSAGE_SELF,&usage);
+                        //printf("resident set max size is %ld\n",usage.ru_maxrss);
+                }
+                //printf("%f\n",(float)total/(float)PERIOD);
+                fflush(stdout);
+                j+=PERIOD;
+                if (j >= 2) stable = 1;
+                if(j >= DURATION) break;
+
+        }
+        exit(0);
+#else
 	pause();
+#endif
 	
 }
 
