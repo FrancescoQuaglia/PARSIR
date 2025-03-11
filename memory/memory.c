@@ -118,15 +118,27 @@ void* __wrap_malloc(size_t size){
 	int current;
 	int index;
 	void * chunk_address;
+	int min_chunk_size = MIN_CHUNK_SIZE;
+	int max_chunk_size = MAX_CHUNK_SIZE;
+	int i;
 
 	current = get_current();
 	if (size == 0) return NULL;
-	index = (int)( ((double)size / (double)MIN_CHUNK_SIZE) - EPSILON);
+	for(i = 0; min_chunk_size <= max_chunk_size; i++){
+		if (size <= min_chunk_size) {
+			index = i;
+			break;
+		}
+		min_chunk_size = min_chunk_size << 1;
+		index = i;
+	} 
+	//index = (int)( ((double)size / (double)MIN_CHUNK_SIZE) - EPSILON);
 	AUDIT printf("wrapping malloc for object %d - size is %ld - index is %d\n",current,size,index);
 redo:
 	if(index >= (int)((double)(MAX_MEMORY>>12)/(double)(SEGMENT_PAGES))){
 		printf("unavailable memory for object %d\n",current);
 		exit(EXIT_FAILURE);
+		return NULL;
 	}
 	if ((allocators[current])[index].top_elem == (allocators[current])[index].size){
 		index++;
