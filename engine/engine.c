@@ -240,11 +240,17 @@ void get_hw_config(void){
 	for (i=0; i < 3; i++) ret = fscanf(config,"%s",buff);
 	NUMA_NODES = strtol(buff,NULL,10);
 	printf("PARSIR running with %d NUMA node(s)\n",NUMA_NODES);
+
+
 	for(j = 0 ; j < NUMA_NODES; j++){
 		for (i=0; i < 3; i++) ret = fscanf(config,"%s",buff);
 		p = fgets(buff,LINE,config);
 		printf("%s",buff);
 		fflush(stdout);
+
+
+#if defined(__i386__)
+#elif defined(__x86_64__)
 		temp = strtok(buff,",\n");
 		lower = upper = -1;
 		counter = 0;
@@ -269,6 +275,21 @@ void get_hw_config(void){
 			}
 			temp = strtok(NULL,",\n");
 		}
+#endif
+
+#if defined(__powerpc64__) || defined(__ppc64__)
+		temp = strtok(buff,"-\n");
+		lower = strtol(temp,NULL,10);
+		temp = strtok(NULL,"-\n");
+		upper = strtol(temp,NULL,10);
+		counter = 0;
+		for(i = 0, z = lower; z <= upper; i++, z++){
+				counter++;
+				cpu_id_per_numa_node[j][i] = z;
+		}
+#endif
+
+
 		cpus_per_numa_node[j] = counter;
 		printf("assigned %d CPUs to the entry of node %d\n",counter,j);
 		printf("ids are: ");
